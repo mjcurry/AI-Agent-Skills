@@ -25,7 +25,7 @@ python scripts/changelog.py <from-ref> [<to-ref>] [options]
 |---|---|
 | `<from-ref> <to-ref>` | Range to summarize. `to-ref` defaults to `HEAD`. |
 | `--version LABEL` | Heading version, e.g. `1.5.0` (default: `Unreleased`). |
-| `--date YYYY-MM-DD` | Heading date (default: today). |
+| `--date YYYY-MM-DD` | Heading date (default: the commit date of `<to-ref>`, so cutting a historical tag gets the right date). |
 | `--repo-url URL` | Base repo URL; short hashes become commit links. |
 | `--include-all` | Also include `chore/test/ci/build/style` commits (default: dropped). |
 | `--strict` | Drop commits that don't follow Conventional Commits instead of bucketing them under "Other". |

@@ -17,7 +17,9 @@ FIELD = "\x1f"  # between fields of one commit
 RECORD = "\x1e"  # between commits
 
 # Conventional Commit subject: type(scope)!: description
-CC_RE = re.compile(r"^(?P<type>\w+)(?:\((?P<scope>[^)]+)\))?(?P<bang>!)?:\s+(?P<desc>.+)$")
+CC_RE = re.compile(
+    r"^(?P<type>\w+)(?:\((?P<scope>[^)]+)\))?(?P<bang>!)?:\s+(?P<desc>.+)$"
+)
 
 TYPE_SECTION = {
     "feat": "Added",
@@ -46,6 +48,12 @@ def git(args: list[str]) -> str:
     except subprocess.CalledProcessError as exc:
         sys.exit(f"git {' '.join(args)} failed: {exc.stderr.strip()}")
     return out.stdout
+
+
+def ref_date(ref: str) -> str:
+    """Committer date (YYYY-MM-DD) of a ref, falling back to today."""
+    out = git(["log", "-1", "--format=%cs", ref]).strip()
+    return out or datetime.date.today().isoformat()
 
 
 def collect(rev_range: str) -> list[dict]:
@@ -97,8 +105,11 @@ def build(commits, version, date, repo_url, include_all, strict) -> str:
         )
         prefix = "**BREAKING** " if breaking else ""
         entry = f"- {prefix}{text} {link}"
-        # Breaking changes float to the top of their section.
-        buckets[section].insert(0, entry) if breaking else buckets[section].append(entry)
+        if breaking:
+            # Breaking changes float to the top of their section.
+            buckets[section].insert(0, entry)
+        else:
+            buckets[section].append(entry)
 
     lines = [f"## [{version}] - {date}", ""]
     any_content = False
@@ -123,7 +134,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("from_ref", help="Start ref (exclusive), e.g. v1.4.0")
     p.add_argument("to_ref", nargs="?", default="HEAD", help="End ref (default HEAD)")
     p.add_argument("--version", default="Unreleased")
-    p.add_argument("--date", default=datetime.date.today().isoformat())
+    p.add_argument(
+        "--date",
+        help="Heading date YYYY-MM-DD (default: commit date of <to-ref>).",
+    )
     p.add_argument("--repo-url", default="")
     p.add_argument("--include-all", action="store_true")
     p.add_argument("--strict", action="store_true")
@@ -136,16 +150,15 @@ def main(argv: list[str] | None = None) -> int:
     rev_range = f"{args.from_ref}..{args.to_ref}"
     commits = collect(rev_range)
     if not commits:
-        print(
-            f"No commits in {rev_range}.", file=sys.stderr
-        )
+        print(f"No commits in {rev_range}.", file=sys.stderr)
         return 1
 
+    date = args.date or ref_date(args.to_ref)
     print(
         build(
             commits,
             args.version,
-            args.date,
+            date,
             args.repo_url,
             args.include_all,
             args.strict,
