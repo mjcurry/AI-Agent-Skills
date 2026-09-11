@@ -2,7 +2,8 @@
 """Minimal Claude eval runner.
 
 Runs every case in a JSONL file against the Claude API, scores it, prints a
-pass-rate summary, and optionally writes a JSON report for diffing runs.
+pass-rate summary, and optionally writes a JSON report. Pass a previous
+report as --baseline to see exactly which cases regressed or improved.
 
 Requires: pip install anthropic   (and ANTHROPIC_API_KEY in the environment)
 
@@ -10,9 +11,6 @@ Case format (one JSON object per line in cases.jsonl):
 
   {"id": "greet-1", "input": "Say hi in French.",
    "scorer": "contains", "expect": "bonjour"}
-
-  {"id": "json-shape", "input": "Return {\"ok\": true} and nothing else.",
-   "scorer": "regex", "expect": "^\\\\s*\\\\{\\\"ok\\\":\\\\s*true\\\\}\\\\s*$"}
 
   {"id": "tone", "input": "Decline politely.",
    "scorer": "judge", "rubric": "The reply declines and stays courteous."}
@@ -26,6 +24,9 @@ import argparse
 import json
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor
+
+DEFAULT_MODEL = "claude-sonnet-5"
 
 
 def normalize(s: str) -> str:
@@ -48,6 +49,18 @@ def load_cases(path: str) -> list[dict]:
     return cases
 
 
+def load_baseline(path: str) -> dict:
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, json.JSONDecodeError) as exc:
+        sys.exit(f"--baseline: cannot read {path}: {exc}")
+    return {
+        "pass_rate": data.get("pass_rate"),
+        "by_id": {r["id"]: bool(r.get("passed")) for r in data.get("results", [])},
+    }
+
+
 def make_client():
     try:
         import anthropic
@@ -65,9 +78,7 @@ def run_case(client, model: str, system: str, text: str, max_tokens: int) -> str
     if system:
         kwargs["system"] = system
     resp = client.messages.create(**kwargs)
-    return "".join(
-        block.text for block in resp.content if block.type == "text"
-    ).strip()
+    return "".join(block.text for block in resp.content if block.type == "text").strip()
 
 
 def judge(client, judge_model: str, rubric: str, output: str) -> tuple[bool, str]:
@@ -101,17 +112,45 @@ def score(client, case: dict, output: str, judge_model: str) -> tuple[bool, str]
     return False, f"unknown scorer '{scorer}'"
 
 
+def evaluate(client, case: dict, cid: str, model: str, system: str,
+             max_tokens: int, judge_model: str) -> dict:
+    """Run + score one case. Never raises — one bad case shouldn't abort a run."""
+    try:
+        output = run_case(client, model, system, case["input"], max_tokens)
+        passed, detail = score(client, case, output, judge_model)
+        return {"id": cid, "passed": passed, "detail": detail, "output": output}
+    except Exception as exc:  # noqa: BLE001
+        return {"id": cid, "passed": False, "detail": f"error: {exc}", "output": ""}
+
+
+def compare(results: list[dict], baseline: dict) -> dict:
+    prev = baseline["by_id"]
+    return {
+        "baseline_pass_rate": baseline["pass_rate"],
+        "regressions": [r["id"] for r in results if prev.get(r["id"]) is True and not r["passed"]],
+        "improvements": [r["id"] for r in results if prev.get(r["id"]) is False and r["passed"]],
+        "new_cases": [r["id"] for r in results if r["id"] not in prev],
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Run a Claude eval suite.")
     p.add_argument("--cases", default="cases.jsonl")
     p.add_argument("--system", help="Path to a system-prompt file (optional).")
-    p.add_argument("--model", default="claude-sonnet-4-6")
-    p.add_argument("--judge-model", default="claude-sonnet-4-6")
+    p.add_argument("--model", default=DEFAULT_MODEL)
+    p.add_argument("--judge-model", default=DEFAULT_MODEL)
     p.add_argument("--max-tokens", type=int, default=1024)
     p.add_argument("--limit", type=int, help="Run only the first N cases.")
+    p.add_argument("--workers", type=int, default=1,
+                   help="Concurrent cases (default: 1). Mind your rate limit.")
+    p.add_argument("--baseline", metavar="REPORT",
+                   help="Previous --out report to diff against.")
     p.add_argument("--out", help="Write a JSON report to this path.")
     p.add_argument("--json", action="store_true", help="Print JSON, not a table.")
     args = p.parse_args(argv)
+
+    if args.workers < 1:
+        p.error("--workers must be >= 1")
 
     system = ""
     if args.system:
@@ -121,28 +160,22 @@ def main(argv: list[str] | None = None) -> int:
     cases = load_cases(args.cases)
     if args.limit:
         cases = cases[: args.limit]
+    ids = [c.get("id") or f"case-{i}" for i, c in enumerate(cases, 1)]
+
+    baseline = load_baseline(args.baseline) if args.baseline else None
 
     client = make_client()
-    results = []
-    for case in cases:
-        cid = case.get("id", f"case-{len(results) + 1}")
-        try:
-            output = run_case(
-                client, args.model, system, case["input"], args.max_tokens
-            )
-            passed, detail = score(client, case, output, args.judge_model)
-            results.append(
-                {
-                    "id": cid,
-                    "passed": passed,
-                    "detail": detail,
-                    "output": output,
-                }
-            )
-        except Exception as exc:  # noqa: BLE001 — one bad case shouldn't abort
-            results.append(
-                {"id": cid, "passed": False, "detail": f"error: {exc}", "output": ""}
-            )
+
+    def work(pair):
+        case, cid = pair
+        return evaluate(client, case, cid, args.model, system,
+                        args.max_tokens, args.judge_model)
+
+    if args.workers == 1:
+        results = [work(pair) for pair in zip(cases, ids)]
+    else:
+        with ThreadPoolExecutor(max_workers=args.workers) as pool:
+            results = list(pool.map(work, zip(cases, ids)))  # preserves order
 
     n = len(results)
     n_pass = sum(1 for r in results if r["passed"])
@@ -155,6 +188,8 @@ def main(argv: list[str] | None = None) -> int:
         "pass_rate": round(rate, 4),
         "results": results,
     }
+    if baseline:
+        report["comparison"] = compare(results, baseline)
 
     if args.out:
         with open(args.out, "w", encoding="utf-8") as fh:
@@ -170,6 +205,18 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  [{mark}] {r['id']} — {r['detail']}")
             if not r["passed"] and r["output"]:
                 print(f"         output: {r['output'][:100]!r}")
+        if baseline:
+            cmp = report["comparison"]
+            prev_rate = cmp["baseline_pass_rate"]
+            delta = (
+                f"{rate - prev_rate:+.0%}" if isinstance(prev_rate, (int, float)) else "n/a"
+            )
+            print(f"\nvs baseline: {delta}")
+            for label, key in (("Regressed", "regressions"),
+                               ("Improved", "improvements"),
+                               ("New", "new_cases")):
+                if cmp[key]:
+                    print(f"  {label}: {', '.join(cmp[key])}")
         print()
         print("Green means these cases didn't regress — not 'correct in general'.")
 

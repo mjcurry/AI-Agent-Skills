@@ -19,8 +19,12 @@ python run_eval.py
 # iterate fast: first 3 cases only
 python run_eval.py --limit 3
 
-# test a specific system prompt and model, save a report to diff later
-python run_eval.py --system prompts/support.txt --model claude-haiku-4-5 --out runs/haiku.json
+# record a baseline, then see exactly what a change regressed or improved
+python run_eval.py --system prompts/v1.txt --out runs/baseline.json
+python run_eval.py --system prompts/v2.txt --baseline runs/baseline.json
+
+# try a cheaper model, 4 cases at a time
+python run_eval.py --model claude-haiku-4-5 --workers 4 --baseline runs/baseline.json
 ```
 
 Exit code is `0` only if every case passes, so this drops straight into CI.
