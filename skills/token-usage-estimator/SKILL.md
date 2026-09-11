@@ -24,10 +24,12 @@ python scripts/estimate_tokens.py <path-or-->  [options]
 
 | Option | Effect |
 |---|---|
-| `--model {opus,sonnet,haiku}` | Price against a specific model (default: all three). |
+| `--model TIER` | Price against one tier — `opus`, `sonnet`, `haiku`, or any tier defined in `--pricing` (default: all). |
 | `--output-tokens N` | Assume `N` output tokens per call when costing (default: 0). |
 | `--runs N` | Multiply the cost by `N` calls (e.g. a batch). |
 | `--exact` | Use the Anthropic token-counting API for an exact input count. Requires `anthropic` installed and `ANTHROPIC_API_KEY` set. |
+| `--count-model ID` | Model ID to count against in `--exact` mode (default: a current Sonnet). |
+| `--pricing FILE` | JSON that overrides or extends per-tier pricing without editing the script (format below). |
 | `--json` | Emit machine-readable JSON instead of a table. |
 
 Examples:
@@ -41,6 +43,17 @@ echo "..." | python scripts/estimate_tokens.py - --model haiku --output-tokens 4
 
 # Exact input count via the API
 python scripts/estimate_tokens.py prompt.txt --exact
+
+# Current rates from a file you maintain, rather than the built-in constants
+python scripts/estimate_tokens.py prompt.txt --pricing pricing.json
+```
+
+`pricing.json` — partial entries are fine, unspecified fields keep their defaults:
+
+```json
+{"opus":   {"input": 15.0, "output": 75.0, "context_window": 200000},
+ "sonnet": {"input": 3.0,  "output": 15.0},
+ "haiku":  {"input": 1.0,  "output": 5.0}}
 ```
 
 ## How to report results
@@ -54,4 +67,4 @@ python scripts/estimate_tokens.py prompt.txt --exact
 
 - The heuristic blends a character-based and a word-based estimate. It is typically within ~10–15% for English prose and is rougher for code, non-Latin scripts, and heavy markup. Always label it an estimate.
 - For anything where being wrong costs real money (large batches, budget approvals), use `--exact`.
-- The pricing table in the script is a constant clearly marked to verify against current published Anthropic pricing. Treat it as "last known," not authoritative — confirm rates before quoting hard numbers to anyone.
+- The built-in pricing table is a set of last-known constants, clearly marked to verify against current published Anthropic pricing. For anything that matters, keep a `pricing.json` you maintain and pass `--pricing` — that way rates are updated in one place instead of by editing code.
