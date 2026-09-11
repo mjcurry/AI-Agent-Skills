@@ -33,6 +33,13 @@ def looks_binary(path: str) -> bool:
         return False
 
 
+def shorten(path: str, width: int) -> str:
+    """Keep the *tail* of a long path — the filename is the informative part."""
+    if len(path) <= width:
+        return path
+    return "…" + path[-(width - 1):]
+
+
 @dataclass
 class FileEntry:
     path: str
@@ -47,6 +54,8 @@ class Plan:
     skipped: list[FileEntry] = field(default_factory=list)
     budget: int = 0
     reserve: int = 0
+    # Set when the first candidate considered is too large to fit on its own.
+    first_over_budget: FileEntry | None = None
 
     @property
     def used(self) -> int:
@@ -99,16 +108,19 @@ def order_entries(
     return ranked + rest
 
 
-def build_plan(
-    entries: list[FileEntry], budget: int, reserve: int
-) -> Plan:
+def build_plan(entries: list[FileEntry], budget: int, reserve: int) -> Plan:
     plan = Plan(budget=budget, reserve=reserve)
     effective = budget - reserve
     running = 0
+    seen_candidate = False
     for e in entries:
         if e.skipped:
             plan.skipped.append(e)
             continue
+        if not seen_candidate:
+            seen_candidate = True
+            if e.tokens > effective:
+                plan.first_over_budget = e
         if running + e.tokens <= effective:
             plan.included.append(e)
             running += e.tokens
@@ -136,14 +148,14 @@ def render(plan: Plan) -> str:
         run = 0
         for e in plan.included:
             run += e.tokens
-            out.append(f"{e.path[:46]:<46}{e.tokens:>10,}{run:>10,}")
+            out.append(f"{shorten(e.path, 46):<46}{e.tokens:>10,}{run:>10,}")
         out.append("")
 
     if plan.excluded:
         out.append("EXCLUDE (over budget)                            tokens")
         out.append("-" * 58)
         for e in plan.excluded:
-            out.append(f"{e.path[:46]:<46}{e.tokens:>10,}")
+            out.append(f"{shorten(e.path, 46):<46}{e.tokens:>10,}")
         out.append("")
 
     if plan.skipped:
@@ -153,12 +165,12 @@ def render(plan: Plan) -> str:
         out.append("")
 
     if plan.excluded:
+        out.append("Excluded files: summarize, reference by path, or split the task.")
+    if plan.first_over_budget:
+        f = plan.first_over_budget
         out.append(
-            "Excluded files: summarize, reference by path, or split the task."
-        )
-    if plan.included and plan.included[0].tokens > effective:
-        out.append(
-            "WARNING: even the top-priority file exceeds the budget — "
+            f"WARNING: the first-priority file {f.path} ({f.tokens:,} tokens) "
+            f"exceeds the usable budget of {effective:,} on its own — "
             "chunk it or do a summary pass instead of truncating."
         )
     return "\n".join(out)
@@ -209,17 +221,17 @@ def main(argv: list[str] | None = None) -> int:
                     "budget": plan.budget,
                     "reserve": plan.reserve,
                     "used": plan.used,
+                    "first_over_budget": (
+                        plan.first_over_budget.path if plan.first_over_budget else None
+                    ),
                     "included": [
-                        {"path": e.path, "tokens": e.tokens}
-                        for e in plan.included
+                        {"path": e.path, "tokens": e.tokens} for e in plan.included
                     ],
                     "excluded": [
-                        {"path": e.path, "tokens": e.tokens}
-                        for e in plan.excluded
+                        {"path": e.path, "tokens": e.tokens} for e in plan.excluded
                     ],
                     "skipped": [
-                        {"path": e.path, "reason": e.skipped}
-                        for e in plan.skipped
+                        {"path": e.path, "reason": e.skipped} for e in plan.skipped
                     ],
                 },
                 indent=2,
