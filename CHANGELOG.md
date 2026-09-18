@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the release sections
 are generated from commit history with [`changelog-from-git`](skills/changelog-from-git).
 
+## [0.3.0] - 2026-09-18
+
+### Added
+- add on-prem-infra-discovery skill ([98a50be](https://github.com/mjcurry/AI-Agent-Skills/commit/98a50be))
+
+### Documentation
+- add infrastructure section to the catalog ([1d1394e](https://github.com/mjcurry/AI-Agent-Skills/commit/1d1394e))
+
+
 ## [0.2.0] - 2026-09-11
 
 ### Added
@@ -32,5 +41,6 @@ are generated from commit history with [`changelog-from-git`](skills/changelog-f
 - add token-usage-estimator skill ([01be7f9](https://github.com/mjcurry/AI-Agent-Skills/commit/01be7f9))
 
 
+[0.3.0]: https://github.com/mjcurry/AI-Agent-Skills/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mjcurry/AI-Agent-Skills/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mjcurry/AI-Agent-Skills/releases/tag/v0.1.0
