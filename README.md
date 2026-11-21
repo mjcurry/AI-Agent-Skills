@@ -6,7 +6,7 @@ Each skill is a self-contained directory with a `SKILL.md` (the instructions an 
 
 ## Why this exists
 
-Most "AI prompt" collections are a wall of clever one-liners. This repo takes the opposite stance: a small set of skills, each one solving a real, recurring engineering problem — estimating cost before a large run and attributing it afterward, catching a vague prompt or a sloppy tool definition before it wastes a round-trip, keeping context under budget, stopping a leaked key at the pre-commit line, scaffolding evals so changes are measurable, knowing what on-prem capacity already exists before reaching for another cloud service. The bar for inclusion is that I reach for it on actual work.
+Most "AI prompt" collections are a wall of clever one-liners. This repo takes the opposite stance: a small set of skills, each one solving a real, recurring engineering problem — estimating cost before a large run and attributing it afterward, catching a vague prompt or a sloppy tool definition before it wastes a round-trip, keeping context under budget, stopping a leaked key at the pre-commit line, catching a dependency that doesn't exist or an instruction no reviewer could see, scaffolding evals so changes are measurable, knowing what on-prem capacity already exists before reaching for another cloud service. The bar for inclusion is that I reach for it on actual work.
 
 ## Catalog
 
@@ -25,6 +25,7 @@ Most "AI prompt" collections are a wall of clever one-liners. This repo takes th
 | [`context-budget-planner`](skills/context-budget-planner) | Given a set of files and a token budget, decide what fits and what to drop, with a ranked include/exclude report. | `scripts/plan_context.py` |
 | [`prompt-linter`](skills/prompt-linter) | Audit a prompt against a structured rubric — role clarity, task specificity, output spec, ambiguity, conflicts — and return scored findings with concrete rewrites. | rubric only |
 | [`tool-schema-linter`](skills/tool-schema-linter) | Lint LLM tool/function definitions for the gaps that make models misuse them — missing descriptions, vague params, no `required`, open schemas. Anthropic and OpenAI formats. | `scripts/lint_tools.py` |
+| [`skill-linter`](skills/skill-linter) | Lint `SKILL.md` files against the Agent Skills specification — naming and description rules, YAML pitfalls, size budgets, broken references — plus whether the description can actually trigger. Every skill in this repo passes it. | `scripts/lint_skill.py` |
 
 ### Quality & safety
 
@@ -32,6 +33,8 @@ Most "AI prompt" collections are a wall of clever one-liners. This repo takes th
 |---|---|---|
 | [`eval-harness-scaffolder`](skills/eval-harness-scaffolder) | Generate a minimal, runnable eval suite (cases + runner + scoring) with baseline comparison, so prompt and model changes become measurable instead of vibes. | `templates/` |
 | [`secret-scanner`](skills/secret-scanner) | Catch API keys, tokens, and private keys in files or the staged diff before they're committed. Pattern + entropy based, pre-commit ready. | `scripts/scan_secrets.py` |
+| [`hidden-instruction-scanner`](skills/hidden-instruction-scanner) | Find instructions hidden from human reviewers in skills, agent context files and MCP tool definitions: invisible Unicode Tag characters (decoded in the report), zero-width and bidi controls, JSON-escaped payloads, non-rendering comments. | `scripts/scan_hidden.py` |
+| [`package-reality-check`](skills/package-reality-check) | Before installing what an AI suggested: verify each dependency exists on PyPI or npm and looks established, flagging hallucinated names and freshly registered ones. | `scripts/check_packages.py` |
 
 ### Infrastructure
 
@@ -76,6 +79,9 @@ python skills/token-usage-estimator/scripts/estimate_tokens.py README.md --model
 python skills/context-budget-planner/scripts/plan_context.py "src/**/*.py" --budget 60000
 python skills/secret-scanner/scripts/scan_secrets.py --staged
 python skills/tool-schema-linter/scripts/lint_tools.py tools.json
+python skills/skill-linter/scripts/lint_skill.py skills/
+python skills/hidden-instruction-scanner/scripts/scan_hidden.py skills/ AGENTS.md
+python skills/package-reality-check/scripts/check_packages.py requirements.txt package.json
 python skills/usage-cost-report/scripts/usage_report.py usage.jsonl
 python skills/on-prem-infra-discovery/scripts/discover_infra.py --write .agent/infra-inventory.json --if-stale 14
 python skills/changelog-from-git/scripts/changelog.py v1.0.0 HEAD
