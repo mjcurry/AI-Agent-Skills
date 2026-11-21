@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the release sections
 are generated from commit history with [`changelog-from-git`](skills/changelog-from-git).
 
+## [0.4.0] - 2026-11-20
+
+### Added
+- add package-reality-check skill ([3ffcf88](https://github.com/mjcurry/AI-Agent-Skills/commit/3ffcf88))
+- add hidden-instruction-scanner skill ([6b1958b](https://github.com/mjcurry/AI-Agent-Skills/commit/6b1958b))
+- add skill-linter skill ([9c5e4ce](https://github.com/mjcurry/AI-Agent-Skills/commit/9c5e4ce))
+
+### Documentation
+- add the three new skills to the catalog ([1d0716b](https://github.com/mjcurry/AI-Agent-Skills/commit/1d0716b))
+
+
 ## [0.3.0] - 2026-09-18
 
 ### Added
@@ -41,6 +52,7 @@ are generated from commit history with [`changelog-from-git`](skills/changelog-f
 - add token-usage-estimator skill ([01be7f9](https://github.com/mjcurry/AI-Agent-Skills/commit/01be7f9))
 
 
+[0.4.0]: https://github.com/mjcurry/AI-Agent-Skills/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/mjcurry/AI-Agent-Skills/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mjcurry/AI-Agent-Skills/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mjcurry/AI-Agent-Skills/releases/tag/v0.1.0
